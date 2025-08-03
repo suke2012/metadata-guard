@@ -5,7 +5,6 @@ import com.acme.core.metadata.rule.ValidationContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -175,26 +174,9 @@ public class DefaultMetadataValidator implements MetadataValidator {
      */
     private ValidationContext createOptimizedContext(MetadataGuard.Mode mode, MetadataCollectionUnit unit) {
         ValidationContext context = new ValidationContext(mode);
-        
-        // 批量添加环境变量，避免多次调用
-        Map<String, Object> envData = new HashMap<>();
-        envData.put("framework", "metadata-guard");
-        envData.put("version", "3.0");
-        
-        // 添加单元特有数据
-        if (unit.getUserId() != null) {
-            envData.put("userId", unit.getUserId());
-        }
-        if (unit.getOperateSystem() != null) {
-            envData.put("operateSystem", unit.getOperateSystem());
-        }
-        if (unit.getProdId() != null) {
-            envData.put("prodId", unit.getProdId());
-        }
-        
-        // 批量设置环境变量
-        envData.forEach(context::putEnv);
-        
+        context.setUserId(unit.getUserId());
+        context.setOperateSystem(unit.getOperateSystem());
+        context.setProdId(unit.getProdId());
         return context;
     }
     

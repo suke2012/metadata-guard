@@ -81,7 +81,14 @@ public class DefaultMetadataGuard implements MetadataGuard {
                 if(mf!=null){
                     if(val instanceof Map){ stack.push(val);}
                     else{
-                        ctx.putEnv(mf.value(), val);
+                        String name = mf.value();
+                        if("userId".equals(name)){
+                            ctx.setUserId(String.valueOf(val));
+                        }else if("operateSystem".equals(name) || "system".equals(name)){
+                            ctx.setOperateSystem(String.valueOf(val));
+                        }else if("prodId".equals(name) || "productCode".equals(name)){
+                            ctx.setProdId(String.valueOf(val));
+                        }
                         if(!isTerminalType(val)) stack.push(val);
                     }
                 }else{

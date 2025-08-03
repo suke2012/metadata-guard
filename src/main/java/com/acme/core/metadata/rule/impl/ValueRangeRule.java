@@ -4,12 +4,15 @@ package com.acme.core.metadata.rule.impl;
 import com.acme.core.metadata.MetaViolationException;
 import com.acme.core.metadata.rule.MetaValidationRule;
 import com.acme.core.metadata.rule.ValidationUnit;
+import java.util.Collections;
+import java.util.Set;
 
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
 public class ValueRangeRule implements MetaValidationRule {
     @Override public int order(){ return 30;}
+    @Override public Set<String> fields(){ return Collections.singleton("*"); }
     @Override public void validate(ValidationUnit unit) throws MetaViolationException{
         if(unit.definition()==null || unit.definition().getValuePattern()==null || unit.value()==null) return;
         String pat = unit.definition().getValuePattern();

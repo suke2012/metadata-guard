@@ -80,7 +80,7 @@ class UnifiedMetadataValidatorTest {
     void testValidationModeResolution() {
         // 测试监控模式解析（接口级配置）
         ValidationContext interceptContext = new ValidationContext(MetadataGuard.Mode.INTERCEPT);
-        interceptContext.putEnv("userId", "12345");
+        interceptContext.setUserId("12345");
         
         Map<String, Object> data = new HashMap<>();
         data.put("test", "value");
