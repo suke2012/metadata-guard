@@ -29,8 +29,8 @@ public class DefaultMetadataRegistryService implements MetadataRegistryService {
         last.set(System.currentTimeMillis());
     }
     private List<MetaDefinition> mock(){
-        MetaDefinition age = new MetaDefinition(); age.setKey("age"); age.setValuePattern("0-120");
-        MetaDefinition vip = new MetaDefinition(); vip.setKey("vipLevel"); vip.setValuePattern("1,2,3,4,5");
+        MetaDefinition age = new MetaDefinition(); age.setKey("age"); age.setValuePattern("0-120"); age.setProductCode("P1"); age.setChangeSystem("pccp");
+        MetaDefinition vip = new MetaDefinition(); vip.setKey("vipLevel"); vip.setValuePattern("1,2,3,4,5"); vip.setProductCode("P1"); vip.setChangeSystem("pccp");
         MetaDefinition news = new MetaDefinition(); news.setKey("newsFlag"); news.setAfterTime(Instant.now().minus(Duration.ofDays(1)));
         MetaDefinition gray = new MetaDefinition(); gray.setKey("brokerId"); gray.setGrayEnabled(true); gray.setGrayRatio(20);
         return Arrays.asList(age,vip,news,gray);

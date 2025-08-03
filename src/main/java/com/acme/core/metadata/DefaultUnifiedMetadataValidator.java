@@ -5,6 +5,7 @@ import com.acme.core.metadata.model.MetaDefinition;
 import com.acme.core.metadata.registry.MetadataRegistryService;
 import com.acme.core.metadata.rule.ValidationContext;
 import com.acme.core.metadata.rule.ValidationPipeline;
+import com.acme.core.metadata.rule.ValidationUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -111,16 +112,17 @@ public class DefaultUnifiedMetadataValidator implements UnifiedMetadataValidator
     private void validateKeyValues(Map<String, Object> kvs, ValidationContext context) throws MetaViolationException {
         Map<String, MetaDefinition> defs = registry.getAll();
         ValidationPipeline pipe = ValidationPipeline.instance();
-        
+
         for (Map.Entry<String, Object> entry : kvs.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();
             MetaDefinition def = defs.get(key);
-            
+
             // 检查元数据中心的监控模式配置，优先级高于接口级配置
             ValidationContext actualContext = resolveValidationMode(context, def);
-            
-            pipe.validate(key, value, def, actualContext);
+
+            ValidationUnit unit = new ValidationUnit(key, value, def, actualContext);
+            pipe.validate(unit);
         }
     }
     

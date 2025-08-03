@@ -2,3 +2,4 @@
 com.acme.core.metadata.rule.impl.KeyPresenceRule
 com.acme.core.metadata.rule.impl.GrayRule
 com.acme.core.metadata.rule.impl.ValueRangeRule
+com.acme.core.metadata.rule.impl.ProductSystemMatchRule

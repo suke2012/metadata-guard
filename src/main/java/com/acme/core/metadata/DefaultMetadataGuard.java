@@ -6,6 +6,7 @@ import com.acme.core.metadata.model.MetaDefinition;
 import com.acme.core.metadata.registry.MetadataRegistryService;
 import com.acme.core.metadata.rule.ValidationContext;
 import com.acme.core.metadata.rule.ValidationPipeline;
+import com.acme.core.metadata.rule.ValidationUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +36,20 @@ public class DefaultMetadataGuard implements MetadataGuard {
         Map<String,MetaDefinition> defs = registry.getAll();
         ValidationPipeline pipe = ValidationPipeline.instance();
         for(Map.Entry<String,Object> e: kvs.entrySet()){
-            pipe.validate(e.getKey(), e.getValue(), defs.get(e.getKey()), ctx);
+            MetaDefinition def = defs.get(e.getKey());
+            ValidationContext actual = resolveValidationMode(ctx, def);
+            ValidationUnit unit = new ValidationUnit(e.getKey(), e.getValue(), def, actual);
+            pipe.validate(unit);
         }
+    }
+
+    private ValidationContext resolveValidationMode(ValidationContext ctx, MetaDefinition def){
+        if(def!=null && def.getValidationMode()!=null){
+            ValidationContext metaCtx = new ValidationContext(def.getValidationMode());
+            metaCtx.copyEnvFrom(ctx);
+            return metaCtx;
+        }
+        return ctx;
     }
 
     private static boolean isTerminalType(Object val){
