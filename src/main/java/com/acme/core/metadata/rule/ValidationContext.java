@@ -7,30 +7,35 @@ import com.acme.core.metadata.metric.MetaViolationCounter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class ValidationContext {
     private static final Logger LOG = LoggerFactory.getLogger("MetaViolation");
     private final MetadataGuard.Mode mode;
-    private final Map<String,Object> env = new HashMap<>();
-    
+    private String userId;
+    private String operateSystem;
+    private String prodId;
+
     public ValidationContext(MetadataGuard.Mode mode){ this.mode = mode; }
     public MetadataGuard.Mode mode(){ return mode;}
-    public void putEnv(String k,Object v){ env.put(k,v);}
-    public <T> T env(String k){ return (T)env.get(k);}
-    public int envSize(){ return env.size();}
-    
+
+    public String userId(){ return userId; }
+    public void setUserId(String userId){ this.userId = userId; }
+    public String operateSystem(){ return operateSystem; }
+    public void setOperateSystem(String operateSystem){ this.operateSystem = operateSystem; }
+    public String prodId(){ return prodId; }
+    public void setProdId(String prodId){ this.prodId = prodId; }
+
     /**
      * 复制环境变量到当前上下文
      * @param source 源上下文
      */
     public void copyEnvFrom(ValidationContext source) {
-        if (source != null && source.env != null) {
-            this.env.putAll(source.env);
+        if (source != null) {
+            if(source.userId != null) this.userId = source.userId;
+            if(source.operateSystem != null) this.operateSystem = source.operateSystem;
+            if(source.prodId != null) this.prodId = source.prodId;
         }
     }
-    
+
     public void violate(String msg) throws MetaViolationException{
         if(mode==MetadataGuard.Mode.INTERCEPT){
             throw new MetaViolationException(msg);

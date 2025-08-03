@@ -6,6 +6,7 @@ import com.acme.core.metadata.model.MetaDefinition;
 import com.acme.core.metadata.registry.MetadataRegistryService;
 import com.acme.core.metadata.rule.ValidationContext;
 import com.acme.core.metadata.rule.ValidationPipeline;
+import com.acme.core.metadata.rule.ValidationUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +36,20 @@ public class DefaultMetadataGuard implements MetadataGuard {
         Map<String,MetaDefinition> defs = registry.getAll();
         ValidationPipeline pipe = ValidationPipeline.instance();
         for(Map.Entry<String,Object> e: kvs.entrySet()){
-            pipe.validate(e.getKey(), e.getValue(), defs.get(e.getKey()), ctx);
+            MetaDefinition def = defs.get(e.getKey());
+            ValidationContext actual = resolveValidationMode(ctx, def);
+            ValidationUnit unit = new ValidationUnit(e.getKey(), e.getValue(), def, actual);
+            pipe.validate(unit);
         }
+    }
+
+    private ValidationContext resolveValidationMode(ValidationContext ctx, MetaDefinition def){
+        if(def!=null && def.getValidationMode()!=null){
+            ValidationContext metaCtx = new ValidationContext(def.getValidationMode());
+            metaCtx.copyEnvFrom(ctx);
+            return metaCtx;
+        }
+        return ctx;
     }
 
     private static boolean isTerminalType(Object val){
@@ -68,7 +81,14 @@ public class DefaultMetadataGuard implements MetadataGuard {
                 if(mf!=null){
                     if(val instanceof Map){ stack.push(val);}
                     else{
-                        ctx.putEnv(mf.value(), val);
+                        String name = mf.value();
+                        if("userId".equals(name)){
+                            ctx.setUserId(String.valueOf(val));
+                        }else if("operateSystem".equals(name) || "system".equals(name)){
+                            ctx.setOperateSystem(String.valueOf(val));
+                        }else if("prodId".equals(name) || "productCode".equals(name)){
+                            ctx.setProdId(String.valueOf(val));
+                        }
                         if(!isTerminalType(val)) stack.push(val);
                     }
                 }else{

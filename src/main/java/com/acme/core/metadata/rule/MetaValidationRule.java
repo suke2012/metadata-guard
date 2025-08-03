@@ -2,9 +2,11 @@
 package com.acme.core.metadata.rule;
 
 import com.acme.core.metadata.MetaViolationException;
-import com.acme.core.metadata.model.MetaDefinition;
+import java.util.Collections;
+import java.util.Set;
 
 public interface MetaValidationRule {
     int order();
-    void validate(String key,Object value, MetaDefinition def, ValidationContext ctx) throws MetaViolationException;
+    void validate(ValidationUnit unit) throws MetaViolationException;
+    default Set<String> fields(){ return Collections.emptySet(); }
 }

@@ -13,6 +13,8 @@ public class MetaDefinition {
     private Boolean grayEnabled;
     private Integer grayRatio;
     private MetadataGuard.Mode validationMode; // 元数据中心级的监控模式配置
+    private String productCode; // 参数中心配置的产品码
+    private String changeSystem; // 参数中心配置的变更系统
     // getters and setters
     public String getKey(){return key;}
     public void setKey(String k){ this.key = k;}
@@ -28,4 +30,8 @@ public class MetaDefinition {
     public void setGrayRatio(Integer r){ this.grayRatio = r;}
     public MetadataGuard.Mode getValidationMode(){return validationMode;}
     public void setValidationMode(MetadataGuard.Mode mode){ this.validationMode = mode;}
+    public String getProductCode(){return productCode;}
+    public void setProductCode(String p){ this.productCode = p;}
+    public String getChangeSystem(){return changeSystem;}
+    public void setChangeSystem(String s){ this.changeSystem = s;}
 }
