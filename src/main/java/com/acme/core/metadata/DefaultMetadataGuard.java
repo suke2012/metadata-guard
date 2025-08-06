@@ -2,6 +2,7 @@
 package com.acme.core.metadata;
 
 import com.acme.core.metadata.annotation.MetaField;
+import com.acme.core.metadata.collection.MetadataCollectionUnit;
 import com.acme.core.metadata.model.MetaDefinition;
 import com.acme.core.metadata.registry.MetadataRegistryService;
 import com.acme.core.metadata.rule.ValidationContext;
@@ -38,7 +39,12 @@ public class DefaultMetadataGuard implements MetadataGuard {
         for(Map.Entry<String,Object> e: kvs.entrySet()){
             MetaDefinition def = defs.get(e.getKey());
             ValidationContext actual = resolveValidationMode(ctx, def);
-            ValidationUnit unit = new ValidationUnit(e.getKey(), e.getValue(), def, actual);
+            // 创建MetadataCollectionUnit来适配新的ValidationUnit构造函数
+            MetadataCollectionUnit unitContext = new MetadataCollectionUnit(actual.mode());
+            unitContext.setUserId(actual.userId());
+            unitContext.setOperateSystem(actual.operateSystem());
+            unitContext.setProdId(actual.prodId());
+            ValidationUnit unit = new ValidationUnit(e.getKey(), e.getValue(), def, unitContext);
             pipe.validate(unit);
         }
     }

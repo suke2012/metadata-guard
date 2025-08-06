@@ -1,92 +1,252 @@
 package com.acme.core.metadata;
 
 import com.acme.core.metadata.collection.MetadataCollectionUnit;
-import com.acme.core.metadata.rule.ValidationContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.*;
 
 /**
  * 默认元数据验证器实现（简化版本）
- * 
+ * <p>
  * 流程：DTO列表 -> Converter -> CollectionUnit -> Processor -> 直接验证
- * 
+ * <p>
  * 核心改进：
  * - 支持监控模式从上游传递（MONITOR告警模式/INTERCEPT拦截模式）
  * - 简化验证逻辑，直接使用处理后的数据进行验证
  * - 减少中间层复杂度，提升性能和可维护性
  */
 public class DefaultMetadataValidator implements MetadataValidator {
-    
+
     private static final Logger log = LoggerFactory.getLogger(DefaultMetadataValidator.class);
-    
+
     private final ConverterFactory converterFactory;
     private final UnitProcessorChain processorChain;
     private final UnifiedMetadataValidationFacade validationFacade;
+
+    @Autowired
+    private UnifiedMetadataValidator validator;
     
+    // 异步配置
+    @Value("${meta.guard.async.enabled:false}")
+    private boolean asyncEnabled;
+    
+    @Value("${meta.guard.async.core-pool-size:2}")
+    private int corePoolSize;
+    
+    @Value("${meta.guard.async.max-pool-size:8}")
+    private int maxPoolSize;
+    
+    @Value("${meta.guard.async.queue-capacity:1000}")
+    private int queueCapacity;
+    
+    @Value("${meta.guard.async.keep-alive-seconds:60}")
+    private int keepAliveSeconds;
+    
+    // 线程池
+    private ThreadPoolExecutor asyncExecutor;
+
     public DefaultMetadataValidator(UnifiedMetadataValidationFacade validationFacade) {
         this.validationFacade = validationFacade;
         this.converterFactory = new ConverterFactory();
         this.processorChain = new UnitProcessorChain();
     }
     
+    /**
+     * 初始化异步线程池
+     */
+    @PostConstruct
+    public void initAsyncExecutor() {
+        if (asyncEnabled) {
+            ThreadFactory threadFactory = new ThreadFactory() {
+                private int counter = 0;
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread thread = new Thread(r, "meta-guard-async-" + (++counter));
+                    thread.setDaemon(true);  // 设置为守护线程
+                    return thread;
+                }
+            };
+            
+            this.asyncExecutor = new ThreadPoolExecutor(
+                corePoolSize,
+                maxPoolSize,
+                keepAliveSeconds,
+                TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(queueCapacity),
+                threadFactory,
+                new ThreadPoolExecutor.CallerRunsPolicy()  // 队列满时调用者线程执行
+            );
+            
+            log.info("Initialized async thread pool: core={}, max={}, queue={}, keepAlive={}s", 
+                    corePoolSize, maxPoolSize, queueCapacity, keepAliveSeconds);
+        } else {
+            log.info("Async validation is disabled");
+        }
+    }
+    
+    /**
+     * 销毁异步线程池
+     */
+    @PreDestroy
+    public void destroyAsyncExecutor() {
+        if (asyncExecutor != null) {
+            log.info("Shutting down async thread pool...");
+            asyncExecutor.shutdown();
+            try {
+                if (!asyncExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    log.warn("Async thread pool did not terminate gracefully, forcing shutdown");
+                    asyncExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                log.error("Interrupted while waiting for async thread pool termination", e);
+                asyncExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
     @Override
     public void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass) throws MetaViolationException {
         // 使用默认告警模式
         validate(dtoList, converterClass, MetadataGuard.Mode.MONITOR);
     }
-    
+
     public void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) throws MetaViolationException {
         if (dtoList == null || dtoList.isEmpty()) {
             log.debug("No DTOs provided for validation");
             return;
         }
-        
+
         // 验证列表中的对象是否为同一类型
         validateSameType(dtoList);
         
-        try {
-            // 步骤1: 获取转换器并转换数据
-            DataConverter converter = converterFactory.getConverter(converterClass);
-            if (converter == null) {
-                handleConverterError(converterClass, mode);
-                return;
-            }
-            
-            log.debug("Using converter: {} for {} DTOs in {} mode", 
-                     converter.getDescription(), dtoList.size(), mode);
-            
-            // 步骤2: 转换为监控单元
-            List<MetadataCollectionUnit> units = converter.convert(dtoList.toArray());
-            if (units == null || units.isEmpty()) {
-                log.debug("No collection units generated by converter: {}", converter.getDescription());
-                return;
-            }
-            
-            // 步骤3: 处理器链处理（解析特殊字段）
-            List<MetadataCollectionUnit> processedUnits = processorChain.processAll(units);
-            
-            // 步骤4: 直接验证处理后的数据
-            validateProcessedUnits(processedUnits, mode);
-            
-        } catch (Exception e) {
-            handleError(e, mode);
+        // 根据异步开关选择执行方式
+        if (asyncEnabled && mode == MetadataGuard.Mode.MONITOR) {
+            // 异步模式：只在MONITOR模式下生效，INTERCEPT模式必须同步等待结果
+            validateAsync(dtoList, converterClass, mode);
+        } else {
+            // 同步模式
+            validateSync(dtoList, converterClass, mode);
         }
     }
     
-    @Override
-    public void registerConverter(DataConverter converter) {
-        converterFactory.registerConverter(converter);
+    /**
+     * 同步验证
+     */
+    private void validateSync(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) throws MetaViolationException {
+        try {
+            doValidate(dtoList, converterClass, mode);
+        } catch (Exception e) {
+            handleException(e);
+        }
     }
     
-    @Override
-    public void registerUnitProcessor(UnitProcessor processor) {
-        processorChain.registerProcessor(processor);
+    /**
+     * 异步验证（仅在MONITOR模式下使用）
+     */
+    private void validateAsync(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) {
+        if (asyncExecutor == null) {
+            log.warn("Async executor not initialized, falling back to sync validation");
+            try {
+                validateSync(dtoList, converterClass, mode);
+            } catch (MetaViolationException e) {
+                // 异步模式下不抛出异常，只记录日志
+                log.warn("Async validation failed: {}", e.getMessage());
+            }
+            return;
+        }
+        
+        // 提交异步任务
+        asyncExecutor.submit(() -> {
+            try {
+                log.debug("Executing async validation for {} DTOs", dtoList.size());
+                doValidate(dtoList, converterClass, mode);
+                log.debug("Async validation completed successfully for {} DTOs", dtoList.size());
+            } catch (Exception e) {
+                // 异步模式下所有异常都记录日志，不抛出
+                if (e instanceof MetaViolationException) {
+                    log.warn("Async validation rule violation: {}", e.getMessage());
+                } else {
+                    log.error("Async validation technical error: {}", e.getMessage(), e);
+                }
+            }
+        });
+        
+        log.debug("Submitted async validation task for {} DTOs", dtoList.size());
     }
-    
-    
+
+    /**
+     * 执行完整的验证流程（内部方法，不处理异常）
+     */
+    private void doValidate(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) throws Exception {
+
+        // 步骤1: 获取转换器并转换数据
+        DataConverter converter = converterFactory.getConverter(converterClass);
+        if (converter == null) {
+            log.warn("No converter found for class: {}", converterClass.getSimpleName());
+            return;
+        }
+
+        log.debug("Using converter: {} for {} DTOs in {} mode",
+                converter.getDescription(), dtoList.size(), mode);
+
+        // 步骤2: 转换为监控单元
+        List<MetadataCollectionUnit> units = converter.convert(dtoList.toArray());
+        if (units == null || units.isEmpty()) {
+            log.debug("No collection units generated by converter: {}", converter.getDescription());
+            return;
+        }
+
+        // 步骤3: 处理器链处理（解析特殊字段）
+        // 这里保留try-catch是合理的，因为处理器失败不应该中断主流程
+        List<MetadataCollectionUnit> processedUnits = safeProcessUnits(units);
+
+        // 步骤4: 核心验证逻辑
+        performCoreValidation(processedUnits, mode);
+    }
+
+    /**
+     * 执行核心验证逻辑（简化版，移除内部异常处理）
+     */
+    private void performCoreValidation(List<MetadataCollectionUnit> processedUnits, MetadataGuard.Mode mode) throws Exception {
+        for (MetadataCollectionUnit unit : processedUnits) {
+            unit.setMode(mode);
+            validator.validateKeyValues(unit);
+        }
+    }
+
+    /**
+     * 安全地处理监控单元（处理器失败不影响主流程）
+     */
+    private List<MetadataCollectionUnit> safeProcessUnits(List<MetadataCollectionUnit> units) {
+        try {
+            return processorChain.processAll(units);
+        } catch (Exception e) {
+            log.error("Unit processor chain failed, using original units: {}", e.getMessage());
+            return units; // 处理失败，使用原始units继续验证
+        }
+    }
+
+    /**
+     * 统一的异常处理收口 - 极简版本
+     * 只有业务规则异常才抛出，其他异常都吃掉
+     */
+    private void handleException(Exception e) throws MetaViolationException {
+        if (e instanceof MetaViolationException) {
+            // 业务规则异常，直接抛出（监控模式的判断在规则层处理）
+            throw (MetaViolationException) e;
+        } else {
+            // 所有其他技术异常都记录日志并吃掉，确保链路健壮性
+            log.error("Validation process encountered technical error: {}", e.getMessage(), e);
+        }
+    }
+
     /**
      * 验证列表中的对象是否为同一类型
      */
@@ -94,123 +254,84 @@ public class DefaultMetadataValidator implements MetadataValidator {
         if (dtoList.size() <= 1) {
             return; // 单个或空列表无需检查
         }
-        
+
         Class<?> firstType = null;
         for (int i = 0; i < dtoList.size(); i++) {
             Object dto = dtoList.get(i);
             if (dto == null) {
                 throw new MetaViolationException("DTO list contains null element at index " + i);
             }
-            
+
             if (firstType == null) {
                 firstType = dto.getClass();
             } else if (!firstType.equals(dto.getClass())) {
                 throw new MetaViolationException(
-                    "All DTOs must be of the same type. Expected: " + firstType.getSimpleName() + 
-                    ", but found: " + dto.getClass().getSimpleName() + " at index " + i);
+                        "All DTOs must be of the same type. Expected: " + firstType.getSimpleName() +
+                                ", but found: " + dto.getClass().getSimpleName() + " at index " + i);
             }
         }
-        
+
         log.debug("Validated {} DTOs of type: {}", dtoList.size(), firstType.getSimpleName());
     }
-    
-    
-    /**
-     * 验证处理后的监控单元（简化版本）
-     * 直接使用处理后的数据与元数据进行对比验证
-     */
-    private void validateProcessedUnits(List<MetadataCollectionUnit> processedUnits, MetadataGuard.Mode mode) 
-            throws MetaViolationException {
-        
-        for (int i = 0; i < processedUnits.size(); i++) {
-            MetadataCollectionUnit unit = processedUnits.get(i);
-            try {
-                validateSingleProcessedUnit(unit, mode);
-            } catch (MetaViolationException e) {
-                String errorMsg = String.format("Validation failed for unit [%d]: %s", i, e.getMessage());
-                log.error(errorMsg);
-                
-                if (mode == MetadataGuard.Mode.INTERCEPT) {
-                    throw new MetaViolationException(errorMsg);
-                } else {
-                    log.warn("Unit [{}] validation failed in MONITOR mode: {}", i, e.getMessage());
-                }
-            }
+
+
+    @Override
+    public void registerConverter(DataConverter converter) {
+        if (converter != null) {
+            converterFactory.registerConverter(converter);
+            log.info("Registered converter: {}", converter.getDescription());
+        }
+    }
+
+    @Override
+    public void registerUnitProcessor(UnitProcessor processor) {
+        if (processor != null) {
+            processorChain.registerProcessor(processor);
+            log.info("Registered unit processor: {}", processor.getDescription());
         }
     }
     
-    /**
-     * 验证单个处理后的监控单元（简化版本）
-     * 用数据单元的数据与元数据中的数据进行对比
-     */
-    private void validateSingleProcessedUnit(MetadataCollectionUnit unit, MetadataGuard.Mode mode) 
-            throws MetaViolationException {
+    @Override
+    public void validateAsync(List<Object> dtoList, Class<? extends DataConverter> converterClass, AsyncValidationCallback callback) {
+        if (callback == null) {
+            callback = AsyncValidationCallback.EMPTY;
+        }
         
-        if (unit == null || unit.getMetadataFields() == null || unit.getMetadataFields().isEmpty()) {
-            String errorMsg = "Invalid or empty collection unit";
-            log.warn(errorMsg);
-            
-            if (mode == MetadataGuard.Mode.INTERCEPT) {
-                throw new MetaViolationException(errorMsg);
-            }
+        if (dtoList == null || dtoList.isEmpty()) {
+            log.debug("No DTOs provided for async validation");
+            callback.onSuccess(0);
             return;
         }
         
-        log.debug("Validating processed unit for userId: {} with {} fields", 
-                 unit.getUserId(), unit.getMetadataFields().size());
-        
-        // 创建优化的验证上下文
-        ValidationContext context = createOptimizedContext(mode, unit);
-        
-        // 直接使用处理后的字段数据进行验证
-        Map<String, Object> fieldsToValidate = unit.getMetadataFields();
-        validationFacade.validate(fieldsToValidate, context);
-        
-        log.debug("Processed unit validation completed for userId: {}", unit.getUserId());
-    }
-    
-    /**
-     * 创建优化的验证上下文
-     */
-    private ValidationContext createOptimizedContext(MetadataGuard.Mode mode, MetadataCollectionUnit unit) {
-        ValidationContext context = new ValidationContext(mode);
-        context.setUserId(unit.getUserId());
-        context.setOperateSystem(unit.getOperateSystem());
-        context.setProdId(unit.getProdId());
-        return context;
-    }
-    
-    /**
-     * 处理转换器错误（简化版本）
-     */
-    private void handleConverterError(Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) 
-            throws MetaViolationException {
-        String errorMsg = "Converter not found or not registered: " + converterClass.getSimpleName() + 
-                ". Please register the converter first using registerConverter() method.";
-        log.error(errorMsg);
-        
-        if (mode == MetadataGuard.Mode.INTERCEPT) {
-            throw new MetaViolationException(errorMsg);
-        } else {
-            log.warn("Converter not found in MONITOR mode: {}", converterClass.getSimpleName());
+        // 检查线程池是否可用
+        if (asyncExecutor == null) {
+            log.warn("Async executor not initialized for explicit async validation");
+            callback.onFailure(new IllegalStateException("Async validation not available"), 0);
+            return;
         }
-    }
-    
-    /**
-     * 处理一般错误（简化版本）
-     */
-    private void handleError(Exception e, MetadataGuard.Mode mode) throws MetaViolationException {
-        String errorMsg = "Validation process failed: " + e.getMessage();
-        log.error(errorMsg, e);
         
-        if (mode == MetadataGuard.Mode.INTERCEPT) {
-            if (e instanceof MetaViolationException) {
-                throw (MetaViolationException) e;
-            } else {
-                throw new MetaViolationException(errorMsg);
+        final AsyncValidationCallback finalCallback = callback;
+        final int dtoCount = dtoList.size();
+        
+        // 提交异步任务
+        asyncExecutor.submit(() -> {
+            try {
+                // 验证列表中的对象是否为同一类型
+                validateSameType(dtoList);
+                
+                // 执行完整的验证流程（使用MONITOR模式，因为异步验证不抛出异常）
+                doValidate(dtoList, converterClass, MetadataGuard.Mode.MONITOR);
+                
+                log.debug("Explicit async validation completed successfully for {} DTOs", dtoCount);
+                finalCallback.onSuccess(dtoCount);
+                
+            } catch (Exception e) {
+                log.error("Explicit async validation failed for {} DTOs: {}", dtoCount, e.getMessage(), e);
+                finalCallback.onFailure(e, dtoCount);
             }
-        } else {
-            log.warn("Validation failed in MONITOR mode: {}", e.getMessage());
-        }
+        });
+        
+        log.debug("Submitted explicit async validation task for {} DTOs", dtoCount);
     }
+
 }

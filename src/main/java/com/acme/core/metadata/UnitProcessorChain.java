@@ -3,6 +3,7 @@ package com.acme.core.metadata;
 import com.acme.core.metadata.collection.MetadataCollectionUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -12,7 +13,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * 监控单元处理器链
  * 按优先级顺序执行多个处理器
+ * Spring管理的单例Bean
  */
+@Component
 public class UnitProcessorChain {
     
     private static final Logger log = LoggerFactory.getLogger(UnitProcessorChain.class);

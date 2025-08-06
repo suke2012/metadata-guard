@@ -2,6 +2,7 @@ package com.acme.demo.processors;
 
 import com.acme.core.metadata.AbstractUnitProcessor;
 import com.acme.core.metadata.collection.MetadataCollectionUnit;
+import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -13,6 +14,7 @@ import java.util.Map;
  * 路径前缀：extInfo.creditExtInfo，避免与其他字段的键冲突
  * 优先级：50（较高优先级，需要在嵌套处理器之前执行）
  */
+@Component
 public class CreditInfoProcessor extends AbstractUnitProcessor {
     
     private static final String FIELD_PATH_PREFIX = "extInfo.creditExtInfo";

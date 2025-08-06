@@ -1,5 +1,6 @@
 package com.acme.core.metadata.rule;
 
+import com.acme.core.metadata.collection.MetadataCollectionUnit;
 import com.acme.core.metadata.model.MetaDefinition;
 
 /**
@@ -11,11 +12,15 @@ public class ValidationUnit {
     private final MetaDefinition definition;
     private final ValidationContext context;
 
-    public ValidationUnit(String key, Object value, MetaDefinition definition, ValidationContext context) {
+    public ValidationUnit(String key, Object value, MetaDefinition definition, MetadataCollectionUnit unit) {
         this.key = key;
         this.value = value;
         this.definition = definition;
-        this.context = context;
+        // 从MetadataCollectionUnit创建ValidationContext
+        this.context = new ValidationContext(unit.getMode());
+        this.context.setUserId(unit.getUserId());
+        this.context.setOperateSystem(unit.getOperateSystem());
+        this.context.setProdId(unit.getProdId());
     }
 
     public String key() { return key; }

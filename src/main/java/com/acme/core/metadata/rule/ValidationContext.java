@@ -3,6 +3,7 @@ package com.acme.core.metadata.rule;
 
 import com.acme.core.metadata.MetaViolationException;
 import com.acme.core.metadata.MetadataGuard;
+import com.acme.core.metadata.collection.MetadataCollectionUnit;
 import com.acme.core.metadata.metric.MetaViolationCounter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,11 +29,23 @@ public class ValidationContext {
      * 复制环境变量到当前上下文
      * @param source 源上下文
      */
+    public void copyEnvFrom(MetadataCollectionUnit source) {
+        if (source != null) {
+            if(source.getUserId() != null) this.userId = source.getUserId();
+            if(source.getOperateSystem() != null) this.operateSystem = source.getOperateSystem();
+            if(source.getProdId() != null) this.prodId = source.getProdId();
+        }
+    }
+    
+    /**
+     * 从ValidationContext复制环境变量
+     * @param source 源ValidationContext
+     */
     public void copyEnvFrom(ValidationContext source) {
         if (source != null) {
-            if(source.userId != null) this.userId = source.userId;
-            if(source.operateSystem != null) this.operateSystem = source.operateSystem;
-            if(source.prodId != null) this.prodId = source.prodId;
+            if(source.userId() != null) this.userId = source.userId();
+            if(source.operateSystem() != null) this.operateSystem = source.operateSystem();
+            if(source.prodId() != null) this.prodId = source.prodId();
         }
     }
 

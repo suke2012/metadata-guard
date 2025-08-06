@@ -1,5 +1,6 @@
 package com.acme.demo.converters;
 
+import com.acme.core.metadata.AbstractConverter;
 import com.acme.core.metadata.DataConverter;
 import com.acme.core.metadata.collection.MetadataCollectionUnit;
 import com.acme.demo.dto.Account;
@@ -11,7 +12,7 @@ import java.util.List;
  * 用户数据转换器
  * 处理单个Account对象
  */
-public class UserDataConverter implements DataConverter {
+public class UserDataConverter extends AbstractConverter {
     
     @Override
     public List<MetadataCollectionUnit> convert(Object... args) {

@@ -5,7 +5,8 @@
       "Bash(find:*)",
       "Bash(rm:*)",
       "Bash(mvn compile:*)",
-      "Bash(git remote set-url:*)"
+      "Bash(git remote set-url:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

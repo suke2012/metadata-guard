@@ -61,6 +61,10 @@
         </property>
     </bean>
     
+    <!-- 单元处理器链 -->
+    <bean id="unitProcessorChain"
+          class="com.acme.core.metadata.UnitProcessorChain"/>
+    
     <!-- 重构后的元数据验证器（推荐使用） -->
     <bean id="metadataValidator"
           class="com.acme.core.metadata.DefaultMetadataValidator">

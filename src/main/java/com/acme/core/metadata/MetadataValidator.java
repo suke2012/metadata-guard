@@ -28,16 +28,21 @@ public interface MetadataValidator {
     void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) throws MetaViolationException;
     
     /**
-     * 注册参数转换器
-     * 
-     * @param converter 转换器实现
+     * 注册数据转换器
      */
     void registerConverter(DataConverter converter);
     
     /**
-     * 注册监控单元处理器
-     * 
-     * @param processor 处理器实现
-     */
+     * 注册单元处理器
+     */  
     void registerUnitProcessor(UnitProcessor processor);
+    
+    /**
+     * 异步验证入口（显式异步调用）
+     * 
+     * @param dtoList 同一种结构体的列表
+     * @param converterClass 转换器类型
+     * @param callback 异步回调（可选）
+     */
+    void validateAsync(List<Object> dtoList, Class<? extends DataConverter> converterClass, AsyncValidationCallback callback);
 }

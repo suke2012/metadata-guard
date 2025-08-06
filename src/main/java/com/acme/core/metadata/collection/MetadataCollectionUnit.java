@@ -1,5 +1,7 @@
 package com.acme.core.metadata.collection;
 
+import com.acme.core.metadata.MetadataGuard;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -14,12 +16,17 @@ public class MetadataCollectionUnit {
     private String userId;        // 用户ID
     private String operateSystem; // 操作系统/来源系统
     private String prodId;        // 产品ID
+    private MetadataGuard.Mode mode = MetadataGuard.Mode.MONITOR;
     
     // 动态的元数据kv对
     private Map<String, Object> metadataFields;
     
     public MetadataCollectionUnit() {
         this.metadataFields = new HashMap<>();
+    }
+
+    public MetadataCollectionUnit(MetadataGuard.Mode mode) {
+        this.mode = mode;
     }
     
     public MetadataCollectionUnit(String userId, String operateSystem, String prodId) {
@@ -97,9 +104,29 @@ public class MetadataCollectionUnit {
     public Map<String, Object> getMetadataFields() {
         return new HashMap<>(metadataFields);
     }
-    
+
+    public MetadataGuard.Mode getMode() {
+        return mode;
+    }
+
+    public void setMode(MetadataGuard.Mode mode) {
+        this.mode = mode;
+    }
+
     public void setMetadataFields(Map<String, Object> metadataFields) {
         this.metadataFields = metadataFields != null ? new HashMap<>(metadataFields) : new HashMap<>();
+    }
+    
+    /**
+     * 复制环境变量从另一个单元
+     */
+    public void copyEnvFrom(MetadataCollectionUnit other) {
+        if (other != null) {
+            this.userId = other.userId;
+            this.operateSystem = other.operateSystem;
+            this.prodId = other.prodId;
+            // 不复制mode，因为mode可能需要被覆盖
+        }
     }
     
     @Override

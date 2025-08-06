@@ -2,6 +2,7 @@ package com.acme.demo.processors;
 
 import com.acme.core.metadata.AbstractUnitProcessor;
 import com.acme.core.metadata.collection.MetadataCollectionUnit;
+import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,6 +13,7 @@ import java.util.Map;
  * 路径前缀：extInfo.creditExtInfo.nested，进一步处理creditExtInfo中的嵌套数据
  * 优先级：100（较低优先级，在CreditInfoProcessor之后执行）
  */
+@Component
 public class NestedFieldProcessor extends AbstractUnitProcessor {
     
     private static final String FIELD_PATH_PREFIX = "extInfo.creditExtInfo.nested";

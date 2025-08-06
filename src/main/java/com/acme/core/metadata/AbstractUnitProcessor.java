@@ -3,7 +3,10 @@ package com.acme.core.metadata;
 import com.acme.core.metadata.collection.MetadataCollectionUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,6 +18,9 @@ import java.util.Map;
 public abstract class AbstractUnitProcessor implements UnitProcessor {
     
     protected final Logger log = LoggerFactory.getLogger(this.getClass());
+
+    @Autowired
+    private UnitProcessorChain unitProcessorChain;
     
     @Override
     public final MetadataCollectionUnit process(MetadataCollectionUnit unit) {
@@ -106,5 +112,18 @@ public abstract class AbstractUnitProcessor implements UnitProcessor {
                 .forEach(entry -> targetFields.put(entry.getKey(), entry.getValue()));
         
         return targetFields;
+    }
+
+    /**
+     * Spring容器初始化后自动注册处理器
+     */
+    @PostConstruct
+    private void registerProcessor() {
+        if (unitProcessorChain != null) {
+            unitProcessorChain.registerProcessor(this);
+            log.info("Auto-registered processor: {} with order: {}", getDescription(), getOrder());
+        } else {
+            log.warn("UnitProcessorChain is not initialized, cannot register processor: {}", getDescription());
+        }
     }
 }
