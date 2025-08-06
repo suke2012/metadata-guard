@@ -113,25 +113,30 @@ public class DefaultMetadataValidator implements MetadataValidator {
 
     @Override
     public void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass) throws MetaViolationException {
-        // 使用默认告警模式
-        validate(dtoList, converterClass, MetadataGuard.Mode.MONITOR);
+        // 使用默认告警模式，默认同步
+        validate(dtoList, converterClass, MetadataGuard.Mode.MONITOR, false);
     }
 
+    @Override
     public void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) throws MetaViolationException {
+        // 默认同步执行
+        validate(dtoList, converterClass, mode, false);
+    }
+
+    @Override
+    public void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass,
+                         MetadataGuard.Mode mode, boolean async) throws MetaViolationException {
         if (dtoList == null || dtoList.isEmpty()) {
             log.debug("No DTOs provided for validation");
             return;
         }
 
-        // 验证列表中的对象是否为同一类型
-        validateSameType(dtoList);
-        
-        // 根据异步开关选择执行方式
-        if (asyncEnabled && mode == MetadataGuard.Mode.MONITOR) {
-            // 异步模式：只在MONITOR模式下生效，INTERCEPT模式必须同步等待结果
+        // 根据异步参数和配置选择执行方式
+        if (async) {
+            validateAsync(dtoList, converterClass, mode);
+        } else if (asyncEnabled && mode == MetadataGuard.Mode.MONITOR) {
             validateAsync(dtoList, converterClass, mode);
         } else {
-            // 同步模式
             validateSync(dtoList, converterClass, mode);
         }
     }
@@ -141,6 +146,7 @@ public class DefaultMetadataValidator implements MetadataValidator {
      */
     private void validateSync(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) throws MetaViolationException {
         try {
+            validateSameType(dtoList);
             doValidate(dtoList, converterClass, mode);
         } catch (Exception e) {
             handleException(e);
@@ -148,7 +154,7 @@ public class DefaultMetadataValidator implements MetadataValidator {
     }
     
     /**
-     * 异步验证（仅在MONITOR模式下使用）
+     * 异步验证（模式无关）
      */
     private void validateAsync(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) {
         if (asyncExecutor == null) {
@@ -161,10 +167,11 @@ public class DefaultMetadataValidator implements MetadataValidator {
             }
             return;
         }
-        
+
         // 提交异步任务
         asyncExecutor.submit(() -> {
             try {
+                validateSameType(dtoList);
                 log.debug("Executing async validation for {} DTOs", dtoList.size());
                 doValidate(dtoList, converterClass, mode);
                 log.debug("Async validation completed successfully for {} DTOs", dtoList.size());
@@ -250,7 +257,7 @@ public class DefaultMetadataValidator implements MetadataValidator {
     /**
      * 验证列表中的对象是否为同一类型
      */
-    private void validateSameType(List<Object> dtoList) throws MetaViolationException {
+    private void validateSameType(List<Object> dtoList) {
         if (dtoList.size() <= 1) {
             return; // 单个或空列表无需检查
         }
@@ -259,13 +266,13 @@ public class DefaultMetadataValidator implements MetadataValidator {
         for (int i = 0; i < dtoList.size(); i++) {
             Object dto = dtoList.get(i);
             if (dto == null) {
-                throw new MetaViolationException("DTO list contains null element at index " + i);
+                throw new IllegalArgumentException("DTO list contains null element at index " + i);
             }
 
             if (firstType == null) {
                 firstType = dto.getClass();
             } else if (!firstType.equals(dto.getClass())) {
-                throw new MetaViolationException(
+                throw new IllegalArgumentException(
                         "All DTOs must be of the same type. Expected: " + firstType.getSimpleName() +
                                 ", but found: " + dto.getClass().getSimpleName() + " at index " + i);
             }

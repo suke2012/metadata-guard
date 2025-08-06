@@ -3,8 +3,6 @@ package com.acme.core.metadata;
 
 import com.acme.core.metadata.registry.impl.DefaultMetadataRegistryService;
 import com.acme.core.metadata.rule.ValidationContext;
-import com.acme.demo.dto.Account;
-import com.acme.demo.dto.CreditAccount;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -44,5 +42,30 @@ class DefaultMetadataGuardImmutabilityTest {
         assertSame(snapCext, ca.getExtInfo());
         assertEquals(30, acc.getExtInfo().get("age"));
         assertEquals(3, ca.getExtInfo().get("vipLevel"));
+    }
+
+    /** 简化版的测试DTO，替代原demo模块中的类 */
+    static class Account {
+        private Map<String,Object> extInfo;
+        private Map<String,CreditAccount> creditMap;
+        private String system;
+        private long time;
+        private String userId;
+        public Map<String,Object> getExtInfo() { return extInfo; }
+        public void setExtInfo(Map<String,Object> extInfo) { this.extInfo = extInfo; }
+        public Map<String,CreditAccount> getCreditMap() { return creditMap; }
+        public void setCreditMap(Map<String,CreditAccount> creditMap) { this.creditMap = creditMap; }
+        public String getSystem() { return system; }
+        public void setSystem(String system) { this.system = system; }
+        public long getTime() { return time; }
+        public void setTime(long time) { this.time = time; }
+        public String getUserId() { return userId; }
+        public void setUserId(String userId) { this.userId = userId; }
+    }
+
+    static class CreditAccount {
+        private Map<String,Object> extInfo;
+        public Map<String,Object> getExtInfo() { return extInfo; }
+        public void setExtInfo(Map<String,Object> extInfo) { this.extInfo = extInfo; }
     }
 }

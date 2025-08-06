@@ -26,6 +26,18 @@ public interface MetadataValidator {
      * @throws MetaViolationException 验证失败时抛出（仅拦截模式）
      */
     void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass, MetadataGuard.Mode mode) throws MetaViolationException;
+
+    /**
+     * 验证入口（指定监控模式，并可选择异步执行）
+     *
+     * @param dtoList 同一种结构体的列表（可以是单个元素的列表）
+     * @param converterClass 转换器类型（必须显式指定）
+     * @param mode 监控模式：MONITOR（告警模式）或 INTERCEPT（拦截模式）
+     * @param async 是否以异步方式执行；为true时所有异常都被内部处理
+     * @throws MetaViolationException 验证失败时抛出（仅在同步拦截模式下）
+     */
+    void validate(List<Object> dtoList, Class<? extends DataConverter> converterClass,
+                  MetadataGuard.Mode mode, boolean async) throws MetaViolationException;
     
     /**
      * 注册数据转换器
